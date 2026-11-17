@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#131314" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>chat-gpt: Ultima</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <style>
+    body { background-color: #131314; color: #e3e3e3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overscroll-behavior-y: none; }
+    .prose pre { background-color: #1e1f20; border-radius: 0.75rem; padding: 0.85rem; overflow-x: auto; border: 1px solid #333537; margin: 0.5rem 0; }
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col select-none">
+  <header class="h-14 px-3 bg-[#1e1f20] border-b border-[#333537] flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center gap-2">
+      <button id="menuBtn" class="p-2 rounded-lg hover:bg-[#2a2b2d]">☰</button>
+      <h1 class="font-bold text-base"><span class="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">chat-gpt: Ultima</span></h1>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button id="newChatBtn" class="p-2 rounded-lg bg-[#2a2b2d] text-xs">+ New</button>
+      <button id="consoleBtn" class="p-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold">&gt;_ Dev</button>
+    </div>
+  </header>
+  <main id="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+    <div id="welcomeScreen" class="h-full flex flex-col items-center justify-center text-center px-4">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg mb-4 text-black font-bold text-2xl">⚡</div>
+      <h2 class="text-2xl font-bold mb-1">chat-gpt: Ultima</h2>
+      <p class="text-sm text-gray-400 max-w-xs mb-6">Mobile Edition • Developer Console</p>
+    </div>
+  </main>
+  <footer class="p-3 bg-[#131314] border-t border-[#333537] shrink-0">
+    <div class="flex items-end gap-2 bg-[#1e1f20] border border-[#333537] rounded-2xl p-2">
+      <textarea id="promptInput" rows="1" placeholder="Message Ultima..." class="flex-1 bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none max-h-32 py-1.5 px-2"></textarea>
+      <button id="sendBtn" class="p-2.5 rounded-xl bg-emerald-500 text-black font-bold">➤</button>
+    </div>
+  </footer>
+  <div id="historyDrawer" class="fixed inset-0 bg-black/70 z-40 hidden">
+    <div class="w-72 h-full bg-[#1e1f20] border-r border-[#333537] p-4 flex flex-col">
+      <div class="flex items-center justify-between mb-4"><span class="font-bold text-sm">Chat History</span><button id="closeHistoryBtn">✕</button></div>
+      <div id="historyList" class="flex-1 overflow-y-auto space-y-2 text-xs"></div>
+    </div>
+  </div>
+  <div id="consoleModal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-end sm:items-center justify-center">
+    <div class="w-full max-w-lg h-[80vh] bg-[#161718] border border-[#333537] rounded-t-2xl sm:rounded-2xl flex flex-col p-4 space-y-4 text-xs">
+      <div class="flex justify-between items-center font-bold text-amber-400"><span>DEV CONSOLE</span><button id="closeConsoleBtn" class="px-2 py-1 bg-[#2a2b2d] rounded">Done</button></div>
+      <label class="text-emerald-400">Gemini API Key:</label>
+      <input id="apiKeyInput" type="password" placeholder="AIza..." class="w-full bg-[#131314] border border-[#333537] rounded p-2 text-white font-mono" />
+      <label class="text-cyan-400">System Prompt:</label>
+      <textarea id="systemPromptInput" rows="3" class="w-full bg-[#131314] border border-[#333537] rounded p-2 text-white font-mono">You are chat-gpt: Ultima, an elite AI assistant.</textarea>
+    </div>
+  </div>
+  <script>
+    let config = JSON.parse(localStorage.getItem('ultima_config') || '{}');
+    config = { apiKey: config.apiKey || '', model: 'gemini-2.5-flash', systemPrompt: config.systemPrompt || 'You are Ultima.', temp: 0.7 };
+    let chats = JSON.parse(localStorage.getItem('ultima_chats') || '[]');
+    let currentChatId = null;
+
+    document.getElementById('apiKeyInput').value = config.apiKey;
+    document.getElementById('systemPromptInput').value = config.systemPrompt;
+    
+    function saveConfig() {
+      config.apiKey = document.getElementById('apiKeyInput').value.trim();
+      config.systemPrompt = document.getElementById('systemPromptInput').value;
+      localStorage.setItem('ultima_config', JSON.stringify(config));
+    }
+
+    document.getElementById('consoleBtn').onclick = () => consoleModal.classList.remove('hidden');
+    document.getElementById('closeConsoleBtn').onclick = () => { saveConfig(); consoleModal.classList.add('hidden'); };
+    document.getElementById('menuBtn').onclick = () => historyDrawer.classList.remove('hidden');
+    document.getElementById('closeHistoryBtn').onclick = () => historyDrawer.classList.add('hidden');
+    document.getElementById('newChatBtn').onclick = () => { currentChatId = null; chatContainer.innerHTML = ''; chatContainer.appendChild(welcomeScreen); welcomeScreen.classList.remove('hidden'); };
+
+    async function handleSend() {
+      const text = promptInput.value.trim();
+      if (!text) return;
+      promptInput.value = '';
+      welcomeScreen.classList.add('hidden');
+      
+      if (!currentChatId) {
+        currentChatId = Date.now().toString();
+        chats.unshift({ id: currentChatId, title: text.slice(0, 32), messages: [] });
+      }
+      const chat = chats.find(c => c.id === currentChatId);
+      chat.messages.push({ role: 'user', text });
+      
+      const userDiv = document.createElement('div'); userDiv.className = 'flex justify-end';
+      userDiv.innerHTML = `<div class="max-w-[85%] rounded-2xl bg-[#2a2b2d] text-white text-sm p-3">${text}</div>`;
+      chatContainer.appendChild(userDiv);
+
+      const botDiv = document.createElement('div'); botDiv.className = 'flex justify-start';
+      const botBubble = document.createElement('div'); botBubble.className = 'max-w-[92%] rounded-2xl text-gray-200 text-sm p-3';
+      botBubble.innerHTML = '<span class="animate-pulse text-emerald-400">Thinking...</span>';
+      botDiv.appendChild(botBubble); chatContainer.appendChild(botDiv);
+
+      try {
+        let reply = '';
+        if (!config.apiKey) {
+          reply = "Please set your Gemini API key in the **>_ Dev** console to chat!";
+        } else {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: config.systemPrompt }] },
+              contents: chat.messages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] }))
+            })
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error.message);
+          reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response.';
+        }
+        botBubble.innerHTML = marked.parse(reply);
+        chat.messages.push({ role: 'assistant', text: reply });
+        localStorage.setItem('ultima_chats', JSON.stringify(chats));
+      } catch (err) {
+        botBubble.innerHTML = `<span class="text-red-400">Error: ${err.message}</span>`;
+      }
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    document.getElementById('sendBtn').onclick = handleSend;
+  </script>
+</body>
+</html>
